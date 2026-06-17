@@ -1,6 +1,6 @@
 let transactions = [];
 let chartInstance = null;
-const API_URL = process.env.API_URL;
+const API_URL = window.location.origin + '/api';
 let filterMonthBtnActive = 'all';
 
 const formatRupiah = (number) => {
@@ -87,7 +87,7 @@ function renderData() {
 		}
 
 		if (d.getDate() === now.getDate() && d.getMonth() === currentMonthIndex && d.getFullYear() === now.getFullYear()) {
-			todayPpn += ppn;
+			weekPpn += ppn;
 			weekProfit += profitKotorPerItem;
 		}
 
@@ -98,7 +98,7 @@ function renderData() {
                         <td class="px-5 py-2 text-sm text-gray-500 font-bold">${t.qty} pcs</td>
 												<td class="px-5 py-2 text-sm text-red-600 font-medium no-print">${formatRupiah(totalModal)}</td>
 												<td class="px-5 py-2 text-sm text-green-600 bg-green-50 font-medium">${formatRupiah(totalJual)}</td>
-                        <td class="px-5 py-2 text-sm text-gray-500 italic ${isPpn ? 'text-yellow-600' : 'text-gray-400'}">${isPpn ? '+10%' : '0%'}</td>
+                        <td class="px-5 py-2 text-sm text-gray-500 italic ${isPpn ? 'text-yellow-600' : 'text-gray-400'}">${isPpn ? '10%' : '0%'}</td>
                         <td class="px-5 py-2 text-sm font-bold no-print ${profitKotorPerItem >= 0 ? 'text-green-600 bg-green-90' : 'text-red-500 bg-red-90'}">${formatRupiah(profitKotorPerItem)}</td>
                         <td class="px-5 py-2 text-sm no-print">
                             <div class="flex space-x-2 justify-end">
@@ -116,7 +116,10 @@ function renderData() {
 	document.getElementById('weekProfitDisplay').innerText = formatRupiah(weekProfit);
 	document.getElementById('monthModal').innerText = formatRupiah(monthModal);
 	document.getElementById('monthSales').innerText = formatRupiah(monthSales);
+	const pembayaranKePbk = monthSales - monthPpn;
+	document.getElementById('monthSales2').innerText = formatRupiah(pembayaranKePbk);
 	document.getElementById('monthPpn').innerText = formatRupiah(monthPpn);
+	document.getElementById('monthPpn2').innerText = formatRupiah(monthPpn);
 	const profitBulanIni = monthSales - monthModal - monthPpn;
 	document.getElementById('monthProfit').innerText = formatRupiah(profitBulanIni);
 
@@ -164,6 +167,13 @@ async function handleFormSubmit(e) {
 
 		alert(isEdit ? "Data berhasil diupdate!" : "Transaksi berhasil disimpan!");
 		fetchData();
+		if (isEdit) {
+			delete document.getElementById('salesForm').dataset.editId;
+			const btn = document.getElementById('formBtn');
+			btn.innerText = "Tambah Transaksi";
+			btn.classList.replace('bg-orange-500', 'bg-indigo-600');
+		}
+
 	} catch (error) {
 		console.error(error);
 		alert("Gagal menyimpan data. Cek koneksi backend.");
@@ -352,6 +362,45 @@ function updateChart() {
 			}
 		}
 	});
+}
+
+async function captureAsPNG() {
+	const printableArea = document.getElementById('printableArea');
+	
+	try {
+		const btn = event.target.closest('button');
+		const originalText = btn.innerHTML;
+		btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Processing...';
+		btn.disabled = true;
+
+		const canvas = await html2canvas(printableArea, {
+			allowTaint: true,
+			useCORS: true,
+			scale: 2,
+			backgroundColor: '#ffffff'
+		});
+
+		// Convert to blob dan download
+		canvas.toBlob(function(blob) {
+			const url = URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			const today = new Date().toLocaleDateString('id-ID');
+			link.href = url;
+			link.download = `Hasil Y Team Gorengan minggu ini - ${today}.png`;
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+			URL.revokeObjectURL(url);
+			btn.innerHTML = originalText;
+			btn.disabled = false;
+		});
+	} catch (error) {
+		console.error('Error capturing PNG:', error);
+		alert('Gagal menangkap gambar. Silakan coba lagi.');
+		const btn = event.target.closest('button');
+		btn.innerHTML = '<i class="fas fa-image mr-1"></i> Download PNG';
+		btn.disabled = false;
+	}
 }
 
 window.addEventListener('load', () => {
