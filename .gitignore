@@ -1,0 +1,10 @@
+node_modules/
+dist/
+sales.db
+.env
+*.log
+build/
+.DS_Store
+.vscode/
+.idea/
+Thumbs.db

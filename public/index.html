@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PBK Lapak Kalkulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+		<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+		<link rel="stylesheet" href="style.css">
+  </head>
+  <body class="text-gray-800">
+    <!-- Navbar -->
+    <nav class="bg-indigo-600 text-white p-4 shadow-lg sticky top-0 z-50">
+      <div class="container mx-auto flex justify-between items-center">
+        <h1 class="text-xl font-bold">
+          <i class="fas fa-chart-line mr-2"></i>PBK Lapak Kalkulator
+        </h1>
+        <button onclick="resetData()" class="text-xs bg-indigo-800 px-3 py-1 rounded hover:bg-red-500 transition no-print">Clear DATA</button>
+      </div>
+    </nav>
+    <div class="container mx-auto mt-8 p-4 grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- KOLUMEN KIRI: Form Input -->
+      <div class="lg:col-span-1 space-y-6">
+        <div class="bg-white p-6 rounded-xl shadow-md card border-t-4 border-indigo-500">
+          <h2 class="text-lg font-bold mb-4 text-gray-700 border-b pb-2">Tambah Penjualan</h2>
+          <form id="salesForm" onsubmit="handleFormSubmit(event)">
+            <div class="space-y-3">
+              <!-- Input Tanggal Manual -->
+              <div>
+                <label class="block text-sm font-medium text-gray-600">Tanggal Transaksi</label>
+                <input type="date" id="transactionDate" required class="w-full mt-1 p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none">
+              </div>
+              <!-- Input Nama Barang -->
+              <div>
+                <label class="block text-sm font-medium text-gray-600">Nama Barang / Item</label>
+                <input type="text" id="itemName" required placeholder="Contoh: Kopi Arabika" class="w-full mt-1 p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none">
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-sm font-medium text-gray-600">Jumlah Barang (Pcs)</label>
+                  <input type="number" id="qty" min="1" step="1" required class="w-full mt-1 p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-600">Harga Beli Total Barang (Rp)</label>
+                  <input type="number" id="buyPrice" min="1" required class="w-full mt-1 p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-600">Harga Jual Per Pcs (Rp)</label>
+                <input type="number" id="sellPrice" min="1" required class="w-full mt-1 p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none">
+              </div>
+              <!-- Checkbox Kena PPN -->
+              <div class="flex items-center gap-2 bg-gray-50 p-3 rounded border border-gray-200">
+                <input type="checkbox" id="isPpnApplicable" checked class="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500">
+                <label for="isPpnApplicable" class="text-sm font-medium text-gray-700 cursor-pointer select-none"> Barang Kena PPN 10%? (Makanan/Minuman) </label>
+              </div>
+              <div class="pt-2">
+                <button type="submit" id="formBtn" class="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded hover:bg-indigo-700 transition duration-300 shadow-lg"> Simpan Transaksi </button>
+              </div>
+            </div>
+          </form>
+        </div>
+        <!-- Summary Kartu -->
+        <div class="grid grid-cols-2 gap-4">
+          <div class="bg-white p-4 rounded-xl shadow border-l-4 border-green-500 card">
+            <p class="text-xs text-gray-500 uppercase font-bold">Total PPN Minggu Ini</p>
+            <h3 id="weekPpnDisplay" class="text-xl font-bold text-green-600">Rp 0</h3>
+          </div>
+          <div class="bg-white p-4 rounded-xl shadow border-l-4 border-blue-500 card">
+            <p class="text-xs text-gray-500 uppercase font-bold">Total Profit Minggu Ini</p>
+            <h3 id="weekProfitDisplay" class="text-xl font-bold text-blue-600">Rp 0</h3>
+          </div>
+        </div>
+      </div>
+      <!-- KOLUMEN KANAN: Report & Dashboard -->
+      <div class="lg:col-span-2 space-y-6">
+        <!-- Filter & Search -->
+        <div class="bg-white p-4 rounded-xl shadow-md border border-gray-200 flex flex-col md:flex-row gap-4 items-center justify-between">
+          <div class="w-full md:w-auto">
+            <label class="block text-xs font-bold text-gray-500 mb-1">Cari Transaksi</label>
+            <input type="text" id="searchInput" onkeyup="renderData()" placeholder="Ketik nama barang..." class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none">
+          </div>
+          <div class="flex gap-2 w-full md:w-auto">
+            <button onclick="filterMonth('all')" class="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 text-sm font-medium transition no-print">Semua</button>
+            <button onclick="filterMonth('current')" class="px-4 py-2 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 text-sm font-medium transition border border-indigo-200 active-month no-print">Bulan Ini</button>
+						<button onclick="filterMonth('week')" class="px-4 py-2 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 text-sm font-medium transition border border-indigo-200 active-month no-print">Minggu Ini</button>
+          </div>
+        </div>
+        <!-- Ringkasan Bulanan -->
+        <div class="bg-white p-6 rounded-xl shadow-md card flex flex-col md:flex-row justify-between items-center md:items-end gap-4 border-t-8 border-indigo-600">
+          <div>
+            <h2 class="text-gray-500 font-medium text-sm">Ringkasan Modal & Profit Bulan Ini</h2>
+            <p class="text-xs text-gray-400">Bulan: <span id="currentMonthLabel"></span>
+            </p>
+          </div>
+          <div class="grid grid-cols-3 w-full max-w-md gap-6 text-center">
+            <div>
+              <p class="text-xs text-gray-500">Total Penjualan</p>
+              <h4 id="monthSales" class="font-bold text-gray-800 text-lg">Rp 0</h4>
+            </div>
+            <div>
+              <p class="text-xs text-gray-500">Total Modal Beli</p>
+              <h4 id="monthModal" class="font-bold text-red-500 text-lg">Rp 0</h4>
+            </div>
+            <div>
+              <p class="text-xs text-gray-500">Total PPN</p>
+              <h4 id="monthPpn" class="font-bold text-yellow-600 text-lg">Rp 0</h4>
+            </div>
+            <div class="col-span-3 bg-gray-50 p-2 rounded mt-2 border border-gray-200">
+              <p class="text-xs text-gray-500">Keuntungan Bersih Bulan Ini</p>
+              <h4 id="monthProfit" class="font-bold text-green-600 text-xl mt-1">Rp 0</h4>
+            </div>
+          </div>
+        </div>
+        <!-- Chart Section -->
+        <div class="bg-white p-6 rounded-xl shadow-md card border border-gray-200">
+          <h3 class="font-bold text-gray-700 mb-4">
+            <i class="fas fa-chart-pie mr-2"></i>Tren Profit Mingguan
+          </h3>
+          <div class="relative h-64 w-full">
+            <canvas id="profitChart"></canvas>
+          </div>
+        </div>
+        <!-- Tabel Transaksi -->
+        <div class="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200" id="printableArea">
+          <div class="p-4 border-b flex justify-between items-center bg-gray-50 top-16 z-10 no-print">
+						<h3 class="font-bold text-gray-700">Detail Riwayat Penjualan</h3>
+						<div class="space-x-2">
+							<button onclick="exportToExcel()" class="text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded hover:bg-green-200 font-bold transition">
+								<i class="fas fa-file-excel mr-1"></i> Export Excel
+							</button>
+							<button onclick="window.print()" class="text-xs bg-gray-100 text-gray-700 px-3 py-1.5 rounded hover:bg-gray-200 font-bold transition">
+								<i class="fas fa-print mr-1"></i> Cetak Laporan
+							</button>
+						</div>
+					</div>
+          <div style="position: relative;">
+						<table class="min-w-full leading-normal text-sm w-full border-collapse">
+            <thead class="bg-gray-100 text-left border-b-2 border-gray-300 sticky top-0 z-20 shadow-sm">
+              <tr>
+                <th class="px-5 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider w-1/4" scope="col">Tanggal</th>
+                <th class="px-5 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider w-20" scope="col">Barang</th>
+                <th class="px-5 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider w-16" scope="col">Qty</th>
+                <th class="px-5 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider w-24 no-print" scope="col">Modal</th>
+                <th class="px-5 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider w-24" scope="col">Jual</th>
+                <th class="px-5 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider w-16" scope="col">PPN MUI?</th>
+                <th class="px-5 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider w-28 no-print" scope="col">Profit Bersih</th>
+                <th class="px-5 py-3 text-xs font-bold text-gray-600 uppercase tracking-wider w-16 no-print" scope="col">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="transactionTableBody" class="text-xs bg-white">
+            </tbody>
+          </table>
+					
+					</div>
+          <div id="emptyState" class="hidden text-center py-8 bg-gray-50 border-t border-gray-200">
+            <p class="text-gray-400">
+              <i class="fas fa-inbox mr-2"></i>Belum ada data penjualan.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script src="app.js"></script>
+  </body>
+</html>

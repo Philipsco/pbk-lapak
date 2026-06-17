@@ -1,0 +1,43 @@
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f3f4f6;
+}
+.card {
+  transition: transform 0.2s;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  
+  #printableArea, #printableArea * {
+    visibility: visible;
+  }
+  
+  #printableArea {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 20px;
+    background-color: white;
+    box-shadow: none;
+  }
+  
+  #printableArea thead {
+    display: table-header-group;
+    border-bottom: 2px solid #000 !important;
+    padding-top: 15px !important;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+}
