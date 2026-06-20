@@ -45,7 +45,27 @@ function renderData() {
 		const dateStr = t.item_name ? t.item_name.toLowerCase() : '';
 
 		const matchSearch = dateStr.includes(searchInput);
-		const matchMonth = filterMonthBtnActive === 'all' || (d.getMonth() === currentMonthIndex && filterMonthBtnActive === 'current') || (filterMonthBtnActive === 'week' && d.getTime() >= now.getTime() - (7 * 24 * 60 * 60 * 1000));
+
+		let matchMonth;
+		if (filterMonthBtnActive === 'all') {
+			matchMonth = true;
+		} else if (filterMonthBtnActive === 'current') {
+			matchMonth = d.getMonth() === currentMonthIndex;
+		} else if (filterMonthBtnActive === 'week') {
+			// Hitung hari Senin minggu ini
+			const day = now.getDay();
+			const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+			const monday = new Date(now.setDate(diff));
+			monday.setHours(0, 0, 0, 0);
+
+			// Hitung hari Minggu minggu ini
+			const sunday = new Date(monday);
+			sunday.setDate(sunday.getDate() + 6);
+			sunday.setHours(23, 59, 59, 999);
+
+			matchMonth = d >= monday && d <= sunday;
+		}
+
 		return matchSearch && matchMonth;
 	});
 
