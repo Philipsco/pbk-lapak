@@ -21,6 +21,7 @@ db.run(`
         date TEXT NOT NULL,
         item_name TEXT NOT NULL,
         qty REAL NOT NULL,
+        qty_tersisa REAL NOT NULL DEFAULT 0,
         buy_price REAL NOT NULL,
         sell_price REAL NOT NULL,
         is_ppn_applicable BOOLEAN DEFAULT 1, -- 1 = Ya (10%), 0 = Tidak (0%)
@@ -40,17 +41,17 @@ app.get('/api/transactions', (req, res) => {
 
 // 2. Create Transaction (Create)
 app.post('/api/transactions', (req, res) => {
-    const { date, itemName, qty, buyPrice, sellPrice, isPpnApplicable } = req.body;
-    
+    const { date, itemName, qty, qtyTersisa, buyPrice, sellPrice, isPpnApplicable } = req.body;
+
     // Validasi sederhana
-    if (!date || !itemName || !qty || !buyPrice || !sellPrice) {
+    if (!date || !itemName || !qty || !sellPrice) {
         return res.status(400).json({ error: "Semua field wajib diisi" });
     }
 
     db.run(
-        `INSERT INTO transactions (date, item_name, qty, buy_price, sell_price, is_ppn_applicable) 
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [date, itemName, qty, buyPrice, sellPrice, isPpnApplicable],
+        `INSERT INTO transactions (date, item_name, qty, qty_tersisa, buy_price, sell_price, is_ppn_applicable)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [date, itemName, qty, qtyTersisa, buyPrice, sellPrice, isPpnApplicable],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ id: this.lastID, message: "Data berhasil disimpan" });
@@ -61,11 +62,11 @@ app.post('/api/transactions', (req, res) => {
 // 3. Update Transaction (Update)
 app.put('/api/transactions/:id', (req, res) => {
     const id = req.params.id;
-    const { date, itemName, qty, buyPrice, sellPrice, isPpnApplicable } = req.body;
+    const { date, itemName, qty, qtyTersisa, buyPrice, sellPrice, isPpnApplicable } = req.body;
 
     db.run(
-        `UPDATE transactions SET date=?, item_name=?, qty=?, buy_price=?, sell_price=?, is_ppn_applicable=? WHERE id=?`,
-        [date, itemName, qty, buyPrice, sellPrice, isPpnApplicable, id],
+        `UPDATE transactions SET date=?, item_name=?, qty=?, qty_tersisa=?, buy_price=?, sell_price=?, is_ppn_applicable=? WHERE id=?`,
+        [date, itemName, qty, qtyTersisa, buyPrice, sellPrice, isPpnApplicable, id],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ message: "Data berhasil diupdate" });

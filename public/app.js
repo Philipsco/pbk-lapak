@@ -65,7 +65,8 @@ function renderData() {
 
 		// Kalkulasi
 		const totalModal = parseFloat(t.buy_price);
-		const totalJual = parseInt(t.qty) * parseFloat(t.sell_price);
+		const totalJualBarang = t.qty - (t.qty_tersisa || 0);
+		const totalJual = totalJualBarang * parseFloat(t.sell_price);
 		const isPpn = t.is_ppn_applicable === 1;
 		const ppnRate = isPpn ? 0.10 : 0;
 		const ppn = totalJual * ppnRate;
@@ -96,6 +97,7 @@ function renderData() {
                         <td class="px-5 py-2 text-sm text-gray-600 whitespace-nowrap">${d.toLocaleDateString('id-ID')}</td>
                         <td class="px-5 py-2 text-sm font-medium text-gray-900 truncate max-w-[100px]" title="${t.item_name}">${t.item_name}</td>
                         <td class="px-5 py-2 text-sm text-gray-500 font-bold">${t.qty} pcs</td>
+												<td class="px-5 py-2 text-sm text-gray-500 font-bold ${t.qty_tersisa ? 'text-yellow-500' : 'text-gray-500'}">${t.qty_tersisa || 0} pcs</td>
 												<td class="px-5 py-2 text-sm text-red-600 font-medium no-print">${formatRupiah(totalModal)}</td>
 												<td class="px-5 py-2 text-sm text-green-600 bg-green-50 font-medium">${formatRupiah(totalJual)}</td>
                         <td class="px-5 py-2 text-sm text-gray-500 italic ${isPpn ? 'text-yellow-600' : 'text-gray-400'}">${isPpn ? '10%' : '0%'}</td>
@@ -134,6 +136,7 @@ async function handleFormSubmit(e) {
 	const dateVal = document.getElementById('transactionDate').value;
 	const itemName = document.getElementById('itemName').value.trim();
 	const qty = parseInt(document.getElementById('qty').value);
+	const qtyTersisa = parseInt(document.getElementById('qty_tersisa').value) || 0;
 	const buyPrice = parseFloat(document.getElementById('buyPrice').value);
 	const sellPrice = parseFloat(document.getElementById('sellPrice').value);
 	const isPpnApplicable = document.getElementById('isPpnApplicable').checked;
@@ -142,6 +145,7 @@ async function handleFormSubmit(e) {
 		date: dateVal,
 		itemName: itemName,
 		qty: qty,
+		qtyTersisa: qtyTersisa || 0,
 		buyPrice: buyPrice,
 		sellPrice: sellPrice,
 		isPpnApplicable: isPpnApplicable ? 1 : 0
@@ -204,6 +208,7 @@ async function editTransaction(id) {
 	document.getElementById('transactionDate').value = item.date;
 	document.getElementById('itemName').value = item.item_name;
 	document.getElementById('qty').value = item.qty;
+	document.getElementById('qty_tersisa').value = item.qty_tersisa || 0;
 	document.getElementById('buyPrice').value = item.buy_price;
 	document.getElementById('sellPrice').value = item.sell_price;
 	document.getElementById('isPpnApplicable').checked = item.is_ppn_applicable === 1;
@@ -249,17 +254,18 @@ document.getElementById('searchInput').addEventListener('keyup', renderData);
 // Export & Chart (Sama seperti sebelumnya, hanya panggil fetchData dulu)
 async function exportToExcel() {
 	const sortedTransactions = [...transactions].reverse();
-	let csvContent = "data:text/csv;charset=utf-8,Tanggal,Nama Barang,Jumlah,Harga Beli,Harga Jual,Modal,Pajak (PPN),Profit Bersih\r\n";
+	let csvContent = "data:text/csv;charset=utf-8,Tanggal,Nama Barang,Jumlah,Jumlah Tersisa,Harga Beli,Harga Jual,Modal,Pajak (PPN),Profit Bersih\r\n";
 
 	sortedTransactions.forEach(t => {
 		const d = new Date(t.date);
 		const totalModal = parseFloat(t.buy_price);
-		const totalJual = parseInt(t.qty) * parseFloat(t.sell_price);
+		const totalJualBarang = t.qty - (t.qty_tersisa || 0);
+		const totalJual = totalJualBarang * parseFloat(t.sell_price);
 		const ppnRate = t.is_ppn_applicable === 1 ? 0.10 : 0;
 		const ppn = totalJual * ppnRate;
 		const profit = (totalJual - totalModal) - ppn;
 
-		csvContent += `${d.toLocaleDateString()},${t.item_name},${t.qty},${t.buy_price},${t.sell_price},${totalModal},${ppn},${profit}\r\n`;
+		csvContent += `${d.toLocaleDateString()},${t.item_name},${t.qty},${t.qty_tersisa || 0},${t.buy_price},${t.sell_price},${totalModal},${ppn},${profit}\r\n`;
 	});
 
 	const encodedUri = encodeURI(csvContent);
@@ -279,7 +285,8 @@ function updateChart() {
 		const d = new Date(t.date);
 		const dateKey = d.toISOString().split('T')[0];
 		const totalModal = parseFloat(t.buy_price);
-		const totalJual = parseInt(t.qty) * parseFloat(t.sell_price);
+		const totalJualBarang = t.qty - (t.qty_tersisa || 0);
+		const totalJual = totalJualBarang * parseFloat(t.sell_price);
 		const ppnRate = t.is_ppn_applicable === 1 ? 0.10 : 0;
 		const profitPerItem = (totalJual - totalModal) - (totalJual * ppnRate);
 		if (!dateMap[dateKey]) {
@@ -366,7 +373,6 @@ function updateChart() {
 
 async function captureAsPNG() {
 	const printableArea = document.getElementById('printableArea');
-	
 	try {
 		const btn = event.target.closest('button');
 		const originalText = btn.innerHTML;
