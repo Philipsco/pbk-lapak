@@ -42,7 +42,7 @@ function renderData() {
 	// Filter Logic
 	let filteredTransactions = transactions.filter(t => {
 		const d = new Date(t.date);
-		const dateStr = t.item_name ? t.item_name.toLowerCase() : '';
+		const dateStr = (t.item_name ? t.item_name.toLowerCase() : '') + ' ' + d.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
 		const matchSearch = dateStr.includes(searchInput);
 
@@ -134,15 +134,15 @@ function renderData() {
 	});
 
 	// Update Dashboard Elements
-	document.getElementById('weekPpnDisplay').innerText = formatRupiah(weekPpn);
-	document.getElementById('weekProfitDisplay').innerText = formatRupiah(weekProfit);
+	const profitBulanIni = monthSales - monthModal - monthPpn;
+	const pembayaranKePbk = monthSales - monthPpn;
+	document.getElementById('weekPpnDisplay').innerText = formatRupiah(monthPpn);
+	document.getElementById('weekProfitDisplay').innerText = formatRupiah(profitBulanIni);
 	document.getElementById('monthModal').innerText = formatRupiah(monthModal);
 	document.getElementById('monthSales').innerText = formatRupiah(monthSales);
-	const pembayaranKePbk = monthSales - monthPpn;
 	document.getElementById('monthSales2').innerText = formatRupiah(pembayaranKePbk);
 	document.getElementById('monthPpn').innerText = formatRupiah(monthPpn);
 	document.getElementById('monthPpn2').innerText = formatRupiah(monthPpn);
-	const profitBulanIni = monthSales - monthModal - monthPpn;
 	document.getElementById('monthProfit').innerText = formatRupiah(profitBulanIni);
 
 	updateChart();
