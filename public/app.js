@@ -1,337 +1,281 @@
 let transactions = [];
 let chartInstance = null;
-const API_URL = window.location.origin + '/api';
-let filterMonthBtnActive = 'all';
+let activeMonthFilter = 'all';
+const APP_CONFIG = {
+	apiBaseUrl: window.location.origin + '/api',
+	ppnRate: 0.10,
+	monthNames: [
+		'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+		'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+	]
+};
 
-const formatRupiah = (number) => {
+const elements = {
+	tableBody: document.getElementById('transactionTableBody'),
+	searchInput: document.getElementById('searchInput'),
+	emptyState: document.getElementById('emptyState'),
+	currentMonthLabel: document.getElementById('currentMonthLabel'),
+	weekPpnDisplay: document.getElementById('weekPpnDisplay'),
+	weekProfitDisplay: document.getElementById('weekProfitDisplay'),
+	monthModal: document.getElementById('monthModal'),
+	monthSales: document.getElementById('monthSales'),
+	monthSales2: document.getElementById('monthSales2'),
+	monthPpn: document.getElementById('monthPpn'),
+	monthPpn2: document.getElementById('monthPpn2'),
+	monthProfit: document.getElementById('monthProfit'),
+	allTimeProfitDisplay: document.getElementById('allTimeProfitDisplay'),
+	salesForm: document.getElementById('salesForm'),
+	formBtn: document.getElementById('formBtn'),
+	transactionDate: document.getElementById('transactionDate'),
+	itemName: document.getElementById('itemName'),
+	qty: document.getElementById('qty'),
+	qtyTersisa: document.getElementById('qty_tersisa'),
+	buyPrice: document.getElementById('buyPrice'),
+	sellPrice: document.getElementById('sellPrice'),
+	isPpnApplicable: document.getElementById('isPpnApplicable'),
+	profitChartCanvas: document.getElementById('profitChart'),
+	printableArea: document.getElementById('printableArea'),
+	monthFilterButtons: document.querySelectorAll('.active-month')
+};
+
+function formatCurrency(amount) {
 	return new Intl.NumberFormat('id-ID', {
 		style: 'currency',
 		currency: 'IDR',
 		minimumFractionDigits: 0
-	}).format(number);
-};
-
-async function fetchData() {
-	try {
-		const response = await fetch(`${API_URL}/transactions`);
-		if (!response.ok) throw new Error('Gagal mengambil data');
-		transactions = await response.json();
-		renderData();
-	} catch (error) {
-		console.error("Error fetching data:", error);
-		alert("Tidak bisa terhubung ke Backend. Pastikan server berjalan di http://localhost:3000");
-	}
+	}).format(amount);
 }
 
-function renderData() {
-	const tableBody = document.getElementById('transactionTableBody');
-	const searchInput = document.getElementById('searchInput').value.toLowerCase();
-	const now = new Date();
-
-	let weekPpn = 0;
-	let weekProfit = 0;
-	let monthModal = 0;
-	let monthSales = 0;
-	let monthPpn = 0;
-
-	// Setup UI Month Label & Filter Logic
-	const currentMonthIndex = now.getMonth();
-	const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-	document.getElementById('currentMonthLabel').innerText = `${now.getFullYear()} - ${months[now.getMonth()]}`;
-
-	// Filter Logic
-	let filteredTransactions = transactions.filter(t => {
-		const d = new Date(t.date);
-		const dateStr = (t.item_name ? t.item_name.toLowerCase() : '') + ' ' + d.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
-
-		const matchSearch = dateStr.includes(searchInput);
-
-		let matchMonth;
-		if (filterMonthBtnActive === 'all') {
-			matchMonth = true;
-		} else if (filterMonthBtnActive === 'current') {
-			matchMonth = d.getMonth() === currentMonthIndex;
-		} else if (filterMonthBtnActive === 'week') {
-			// Hitung hari Senin minggu ini
-			const day = now.getDay();
-			const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-			const monday = new Date(now.setDate(diff));
-			monday.setHours(0, 0, 0, 0);
-
-			// Hitung hari Minggu minggu ini
-			const sunday = new Date(monday);
-			sunday.setDate(sunday.getDate() + 6);
-			sunday.setHours(23, 59, 59, 999);
-
-			matchMonth = d >= monday && d <= sunday;
-		}
-
-		return matchSearch && matchMonth;
-	});
-
-	// Sort: Terbaru di atas
-	filteredTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-	if (filteredTransactions.length === 0) {
-		tableBody.innerHTML = '';
-		document.getElementById('emptyState').classList.remove('hidden');
-	} else {
-		document.getElementById('emptyState').classList.add('hidden');
-		tableBody.innerHTML = '';
-	}
-
-	filteredTransactions.forEach(t => {
-		const d = new Date(t.date);
-
-		// Kalkulasi
-		const totalModal = parseFloat(t.buy_price);
-		const totalJualBarang = t.qty - (t.qty_tersisa || 0);
-		const totalJual = totalJualBarang * parseFloat(t.sell_price);
-		const isPpn = t.is_ppn_applicable === 1;
-		const ppnRate = isPpn ? 0.10 : 0;
-		const ppn = totalJual * ppnRate;
-		const profitKotorPerItem = (totalJual - totalModal) - ppn;
-
-		// Kumpulkan Data Dashboard
-		if (d.getMonth() === currentMonthIndex) {
-			monthModal += totalModal;
-			monthSales += totalJual;
-			monthPpn += ppn;
-		}
-
-		const diffTime = Math.abs(now - d);
-		const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-		if (diffDays <= 7) {
-			weekProfit += profitKotorPerItem;
-			weekPpn += ppn;
-		}
-
-		if (d.getDate() === now.getDate() && d.getMonth() === currentMonthIndex && d.getFullYear() === now.getFullYear()) {
-			weekPpn += ppn;
-			weekProfit += profitKotorPerItem;
-		}
-
-		const row = `
-                    <tr class="hover:bg-gray-50 border-b border-gray-100 transition-colors">
-                        <td class="px-5 py-2 text-sm text-gray-600 whitespace-nowrap">${d.toLocaleDateString('id-ID')}</td>
-                        <td class="px-5 py-2 text-sm font-medium text-gray-900 truncate max-w-[100px]" title="${t.item_name}">${t.item_name}</td>
-                        <td class="px-5 py-2 text-sm text-gray-500 font-bold">${t.qty} pcs</td>
-												<td class="px-5 py-2 text-sm text-gray-500 font-bold ${t.qty_tersisa ? 'text-yellow-500' : 'text-gray-500'}">${t.qty_tersisa || 0} pcs</td>
-												<td class="px-5 py-2 text-sm text-red-600 font-medium no-print">${formatRupiah(totalModal)}</td>
-												<td class="px-5 py-2 text-sm text-green-600 bg-green-50 font-medium">${formatRupiah(totalJual)}</td>
-                        <td class="px-5 py-2 text-sm text-gray-500 italic ${isPpn ? 'text-yellow-600' : 'text-gray-400'}">${isPpn ? '10%' : '0%'}</td>
-                        <td class="px-5 py-2 text-sm font-bold no-print ${profitKotorPerItem >= 0 ? 'text-green-600 bg-green-90' : 'text-red-500 bg-red-90'}">${formatRupiah(profitKotorPerItem)}</td>
-                        <td class="px-5 py-2 text-sm no-print">
-                            <div class="flex space-x-2 justify-end">
-                                <button onclick="editTransaction(${t.id})" class="text-blue-400 hover:text-blue-600 transition"><i class="fas fa-edit"></i></button>
-                                <button onclick="deleteTransaction(${t.id})" class="text-red-400 hover:text-red-600 transition"><i class="fas fa-trash-alt"></i></button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-		tableBody.innerHTML += row;
-	});
-
-	// Update Dashboard Elements
-	const profitBulanIni = monthSales - monthModal - monthPpn;
-	const pembayaranKePbk = monthSales - monthPpn;
-	document.getElementById('weekPpnDisplay').innerText = formatRupiah(monthPpn);
-	document.getElementById('weekProfitDisplay').innerText = formatRupiah(profitBulanIni);
-	document.getElementById('monthModal').innerText = formatRupiah(monthModal);
-	document.getElementById('monthSales').innerText = formatRupiah(monthSales);
-	document.getElementById('monthSales2').innerText = formatRupiah(pembayaranKePbk);
-	document.getElementById('monthPpn').innerText = formatRupiah(monthPpn);
-	document.getElementById('monthPpn2').innerText = formatRupiah(monthPpn);
-	document.getElementById('monthProfit').innerText = formatRupiah(profitBulanIni);
-
-	updateChart();
-}
-
-async function handleFormSubmit(e) {
-	e.preventDefault();
-
-	const idAttr = document.getElementById('salesForm').dataset.editId;
-	const isEdit = !!idAttr;
-	const dateVal = document.getElementById('transactionDate').value;
-	const itemName = document.getElementById('itemName').value.trim();
-	const qty = parseInt(document.getElementById('qty').value);
-	const qtyTersisa = parseInt(document.getElementById('qty_tersisa').value) || 0;
-	const buyPrice = parseFloat(document.getElementById('buyPrice').value);
-	const sellPrice = parseFloat(document.getElementById('sellPrice').value);
-	const isPpnApplicable = document.getElementById('isPpnApplicable').checked;
-
-	const payload = {
-		date: dateVal,
-		itemName: itemName,
-		qty: qty,
-		qtyTersisa: qtyTersisa || 0,
-		buyPrice: buyPrice,
-		sellPrice: sellPrice,
-		isPpnApplicable: isPpnApplicable ? 1 : 0
-	};
-
-	try {
-		const endpoint = isEdit ? `/transactions/${idAttr}` : '/transactions';
-		const method = isEdit ? 'PUT' : 'POST';
-
-		const response = await fetch(`${API_URL}${endpoint}`, {
-			method: method,
-			headers: {
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify(payload)
-		});
-
-		if (!response.ok) throw new Error('Gagal menyimpan data');
-
-		// Reset Form UI
-		document.getElementById('salesForm').reset();
-		document.getElementById('transactionDate').value = '';
-
-		alert(isEdit ? "Data berhasil diupdate!" : "Transaksi berhasil disimpan!");
-		fetchData();
-		if (isEdit) {
-			delete document.getElementById('salesForm').dataset.editId;
-			const btn = document.getElementById('formBtn');
-			btn.innerText = "Tambah Transaksi";
-			btn.classList.replace('bg-orange-500', 'bg-indigo-600');
-		}
-
-	} catch (error) {
-		console.error(error);
-		alert("Gagal menyimpan data. Cek koneksi backend.");
-	}
-}
-
-async function deleteTransaction(id) {
-	if (confirm("Apakah Anda yakin ingin menghapus transaksi ini?")) {
-		try {
-			await fetch(`${API_URL}/transactions/${id}`, {
-				method: 'DELETE'
-			});
-			fetchData();
-		} catch (error) {
-			alert("Gagal menghapus data.");
-		}
-	}
-}
-
-async function editTransaction(id) {
-	const item = transactions.find(t => t.id === id);
-	if (!item) return;
-
-	document.getElementById('salesForm').scrollIntoView({
-		behavior: 'smooth'
-	});
-
-	document.getElementById('transactionDate').value = item.date;
-	document.getElementById('itemName').value = item.item_name;
-	document.getElementById('qty').value = item.qty;
-	document.getElementById('qty_tersisa').value = item.qty_tersisa || 0;
-	document.getElementById('buyPrice').value = item.buy_price;
-	document.getElementById('sellPrice').value = item.sell_price;
-	document.getElementById('isPpnApplicable').checked = item.is_ppn_applicable === 1;
-
-	const btn = document.getElementById('formBtn');
-	btn.innerText = "Update Transaksi";
-	btn.classList.replace('bg-indigo-600', 'bg-orange-500');
-
-	document.getElementById('salesForm').dataset.editId = id;
-}
-
-async function resetData() {
-	if (confirm("PERINGATAN: Semua data akan dihapus dari database! Lanjutkan?")) {
-		try {
-			await fetch(`${API_URL}/transactions`, {
-				method: 'DELETE'
-			});
-			alert("Data dihapus (Pastikan LocalStorage juga dibersihkan jika ada).");
-		} catch (e) {
-			console.log("Clear all not implemented in simple API yet, use Reset Pabrik button logic manually or add DELETE /clear route.");
-		}
-	}
-}
-
-// Filter Bulan Logic
-function filterMonth(type) {
-	filterMonthBtnActive = type;
-	const btns = document.querySelectorAll('.active-month');
-	btns.forEach(b => b.classList.remove('bg-indigo-100', 'text-indigo-700'));
-	btns.forEach(b => b.classList.remove('border-indigo-200'));
-
-	if (type === 'current') {
-		btns[0].classList.add('bg-indigo-100', 'text-indigo-700', 'border-indigo-200');
-	} else if (type === 'week') {
-		btns[1].classList.add('bg-indigo-100', 'text-indigo-700', 'border-indigo-200');
-	}
-	renderData();
-}
-
-// Search Logic
-document.getElementById('searchInput').addEventListener('keyup', renderData);
-
-// Export & Chart (Sama seperti sebelumnya, hanya panggil fetchData dulu)
-async function exportToExcel() {
-	const sortedTransactions = [...transactions].reverse();
-	let csvContent = "data:text/csv;charset=utf-8,Tanggal,Nama Barang,Jumlah,Jumlah Tersisa,Harga Beli,Harga Jual,Modal,Pajak (PPN),Profit Bersih\r\n";
-
-	sortedTransactions.forEach(t => {
-		const d = new Date(t.date);
-		const totalModal = parseFloat(t.buy_price);
-		const totalJualBarang = t.qty - (t.qty_tersisa || 0);
-		const totalJual = totalJualBarang * parseFloat(t.sell_price);
-		const ppnRate = t.is_ppn_applicable === 1 ? 0.10 : 0;
-		const ppn = totalJual * ppnRate;
-		const profit = (totalJual - totalModal) - ppn;
-
-		csvContent += `${d.toLocaleDateString()},${t.item_name},${t.qty},${t.qty_tersisa || 0},${t.buy_price},${t.sell_price},${totalModal},${ppn},${profit}\r\n`;
-	});
-
-	const encodedUri = encodeURI(csvContent);
-	const link = document.createElement("a");
-	link.setAttribute("href", encodedUri);
-	link.setAttribute("download", "Laporan_Penjualan.csv");
+function triggerDownload(href, filename) {
+	const link = document.createElement('a');
+	link.href = href;
+	link.download = filename;
 	document.body.appendChild(link);
 	link.click();
 	document.body.removeChild(link);
 }
 
-function updateChart() {
-	const ctx = document.getElementById('profitChart').getContext('2d');
-	const dateMap = {};
+function calculateTransactionMetrics(transaction) {
+	const qtySold = transaction.qty - (transaction.qty_tersisa || 0);
+	const totalModal = parseFloat(transaction.buy_price);
+	const totalPenjualan = qtySold * parseFloat(transaction.sell_price);
+	const isPpnApplicable = transaction.is_ppn_applicable === 1;
+	const totalPpn = isPpnApplicable ? totalPenjualan * APP_CONFIG.ppnRate : 0;
+	const netProfit = (totalPenjualan - totalModal) - totalPpn;
 
-	transactions.forEach(t => {
-		const d = new Date(t.date);
-		const dateKey = d.toISOString().split('T')[0];
-		const totalModal = parseFloat(t.buy_price);
-		const totalJualBarang = t.qty - (t.qty_tersisa || 0);
-		const totalJual = totalJualBarang * parseFloat(t.sell_price);
-		const ppnRate = t.is_ppn_applicable === 1 ? 0.10 : 0;
-		const profitPerItem = (totalJual - totalModal) - (totalJual * ppnRate);
-		if (!dateMap[dateKey]) {
-			dateMap[dateKey] = 0;
-		}
-		dateMap[dateKey] += profitPerItem;
+	return { qtySold, totalModal, totalPenjualan, isPpnApplicable, totalPpn, netProfit };
+}
+
+function sumTransactionMetrics(transactionList, metricKey) {
+	return transactionList.reduce(
+		(total, transaction) => total + calculateTransactionMetrics(transaction)[metricKey],
+		0
+	);
+}
+
+function isSameMonth(date, referenceDate) {
+	return (
+		date.getMonth() === referenceDate.getMonth() &&
+		date.getFullYear() === referenceDate.getFullYear()
+	);
+}
+
+function getCurrentWeekRange(referenceDate) {
+	const current = new Date(referenceDate);
+	const dayOfWeek = current.getDay();
+	const diffToMonday = current.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+
+	const monday = new Date(current.setDate(diffToMonday));
+	monday.setHours(0, 0, 0, 0);
+
+	const sunday = new Date(monday);
+	sunday.setDate(sunday.getDate() + 6);
+	sunday.setHours(23, 59, 59, 999);
+
+	return { start: monday, end: sunday };
+}
+
+function isWithinRange(date, range) {
+	return date >= range.start && date <= range.end;
+}
+
+function matchesMonthFilter(transactionDate, filterType, now) {
+	switch (filterType) {
+		case 'current':
+			return isSameMonth(transactionDate, now);
+		case 'week':
+			return isWithinRange(transactionDate, getCurrentWeekRange(now));
+		case 'all':
+		default:
+			return true;
+	}
+}
+
+function matchesSearchTerm(transaction, searchTerm) {
+	if (!searchTerm) return true;
+
+	const transactionDate = new Date(transaction.date);
+	const formattedDate = transactionDate.toLocaleDateString('id-ID', {
+		day: '2-digit', month: '2-digit', year: 'numeric'
+	});
+	const itemName = transaction.item_name ? transaction.item_name.toLowerCase() : '';
+
+	return `${itemName} ${formattedDate}`.includes(searchTerm.toLowerCase());
+}
+
+function filterTransactions(transactionList, { searchTerm, monthFilter, now }) {
+	return transactionList.filter((transaction) => {
+		const transactionDate = new Date(transaction.date);
+		return (
+			matchesSearchTerm(transaction, searchTerm) &&
+			matchesMonthFilter(transactionDate, monthFilter, now)
+		);
+	});
+}
+
+function sortByDateDescending(transactionList) {
+	return [...transactionList].sort((a, b) => new Date(b.date) - new Date(a.date));
+}
+
+async function apiRequest(endpoint, options = {}) {
+	const response = await fetch(`${APP_CONFIG.apiBaseUrl}${endpoint}`, {
+		headers: { 'Content-Type': 'application/json' },
+		...options
 	});
 
-	const sortedDates = Object.keys(dateMap).sort((a, b) => new Date(a) - new Date(b));
+	if (!response.ok) {
+		throw new Error(`Request gagal: ${options.method || 'GET'} ${endpoint}`);
+	}
 
-	const labels = sortedDates.map(dateKey => {
-		const d = new Date(dateKey);
-		return `${d.getDate()}/${d.getMonth()+1}`;
+	const contentType = response.headers.get('content-type') || '';
+	return contentType.includes('application/json') ? response.json() : null;
+}
+
+function fetchTransactions() {
+	return apiRequest('/transactions');
+}
+
+function saveTransaction(payload, transactionId) {
+	const endpoint = transactionId ? `/transactions/${transactionId}` : '/transactions';
+	const method = transactionId ? 'PUT' : 'POST';
+	return apiRequest(endpoint, { method, body: JSON.stringify(payload) });
+}
+
+function deleteTransactionById(transactionId) {
+	return apiRequest(`/transactions/${transactionId}`, { method: 'DELETE' });
+}
+
+function deleteAllTransactions() {
+	return apiRequest('/transactions', { method: 'DELETE' });
+}
+
+async function loadTransactions() {
+	try {
+		transactions = await fetchTransactions();
+		renderData();
+	} catch (error) {
+		console.error('Error fetching data:', error);
+		alert('Tidak bisa terhubung ke Backend. Pastikan server berjalan di http://localhost:3000');
+	}
+}
+
+function renderMonthLabel(now) {
+	elements.currentMonthLabel.innerText = `${now.getFullYear()} - ${APP_CONFIG.monthNames[now.getMonth()]}`;
+}
+
+function renderSummaryCards(now) {
+	const currentMonthTransactions = transactions.filter((t) => isSameMonth(new Date(t.date), now));
+	const currentWeekTransactions = transactions.filter((t) =>
+		isWithinRange(new Date(t.date), getCurrentWeekRange(now))
+	);
+
+	const monthSalesTotal = sumTransactionMetrics(currentMonthTransactions, 'totalPenjualan');
+	const monthModalTotal = sumTransactionMetrics(currentMonthTransactions, 'totalModal');
+	const monthPpnTotal = sumTransactionMetrics(currentMonthTransactions, 'totalPpn');
+	const monthProfitTotal = monthSalesTotal - monthModalTotal - monthPpnTotal;
+	const transferToPbkTotal = monthSalesTotal - monthPpnTotal;
+
+	const weekPpnTotal = sumTransactionMetrics(currentWeekTransactions, 'totalPpn');
+	const weekProfitTotal = sumTransactionMetrics(currentWeekTransactions, 'netProfit');
+
+	const allTimeProfitTotal = sumTransactionMetrics(transactions, 'netProfit');
+
+	elements.weekPpnDisplay.innerText = formatCurrency(weekPpnTotal);
+	elements.weekProfitDisplay.innerText = formatCurrency(weekProfitTotal);
+	elements.monthModal.innerText = formatCurrency(monthModalTotal);
+	elements.monthSales.innerText = formatCurrency(monthSalesTotal);
+	elements.monthSales2.innerText = formatCurrency(transferToPbkTotal);
+	elements.monthPpn.innerText = formatCurrency(monthPpnTotal);
+	elements.monthPpn2.innerText = formatCurrency(monthPpnTotal);
+	elements.monthProfit.innerText = formatCurrency(monthProfitTotal);
+	elements.allTimeProfitDisplay.innerText = formatCurrency(allTimeProfitTotal);
+}
+
+function renderTransactionRow(transaction) {
+	const metrics = calculateTransactionMetrics(transaction);
+	const transactionDate = new Date(transaction.date);
+
+	const ppnLabel = metrics.isPpnApplicable ? '10%' : '0%';
+	const ppnColorClass = metrics.isPpnApplicable ? 'text-yellow-600' : 'text-gray-400';
+	const profitColorClass = metrics.netProfit >= 0 ? 'text-green-600 bg-green-90' : 'text-red-500 bg-red-90';
+	const sisaColorClass = transaction.qty_tersisa ? 'text-yellow-500' : 'text-gray-500';
+
+	return `
+		<tr class="hover:bg-gray-50 border-b border-gray-100 transition-colors">
+			<td class="px-5 py-2 text-sm text-gray-600 whitespace-nowrap">${transactionDate.toLocaleDateString('id-ID')}</td>
+			<td class="px-5 py-2 text-sm font-medium text-gray-900 truncate max-w-[100px]" title="${transaction.item_name}">${transaction.item_name}</td>
+			<td class="px-5 py-2 text-sm text-gray-500 font-bold">${transaction.qty} pcs</td>
+			<td class="px-5 py-2 text-sm text-gray-500 font-bold ${sisaColorClass}">${transaction.qty_tersisa || 0} pcs</td>
+			<td class="px-5 py-2 text-sm text-red-600 font-medium no-print">${formatCurrency(metrics.totalModal)}</td>
+			<td class="px-5 py-2 text-sm text-green-600 bg-green-50 font-medium">${formatCurrency(metrics.totalPenjualan)}</td>
+			<td class="px-5 py-2 text-sm text-gray-500 italic ${ppnColorClass}">${ppnLabel}</td>
+			<td class="px-5 py-2 text-sm font-bold no-print ${profitColorClass}">${formatCurrency(metrics.netProfit)}</td>
+			<td class="px-5 py-2 text-sm no-print">
+				<div class="flex space-x-2 justify-end">
+					<button onclick="editTransaction(${transaction.id})" class="text-blue-400 hover:text-blue-600 transition"><i class="fas fa-edit"></i></button>
+					<button onclick="deleteTransaction(${transaction.id})" class="text-red-400 hover:text-red-600 transition"><i class="fas fa-trash-alt"></i></button>
+				</div>
+			</td>
+		</tr>
+	`;
+}
+
+function renderTransactionTable(transactionList) {
+	const hasData = transactionList.length > 0;
+	elements.emptyState.classList.toggle('hidden', hasData);
+	elements.tableBody.innerHTML = hasData ? transactionList.map(renderTransactionRow).join('') : '';
+}
+
+function buildDailyProfitMap(transactionList) {
+	const dailyProfitMap = new Map();
+
+	transactionList.forEach((transaction) => {
+		const dateKey = new Date(transaction.date).toISOString().split('T')[0];
+		const { netProfit } = calculateTransactionMetrics(transaction);
+		dailyProfitMap.set(dateKey, (dailyProfitMap.get(dateKey) || 0) + netProfit);
 	});
 
-	const dataPoints = sortedDates.map(dateKey => dateMap[dateKey]);
+	return dailyProfitMap;
+}
+
+function renderChart(transactionList) {
+	const dailyProfitMap = buildDailyProfitMap(transactionList);
+	const sortedDateKeys = [...dailyProfitMap.keys()].sort((a, b) => new Date(a) - new Date(b));
+
+	const labels = sortedDateKeys.map((dateKey) => {
+		const date = new Date(dateKey);
+		return `${date.getDate()}/${date.getMonth() + 1}`;
+	});
+	const dataPoints = sortedDateKeys.map((dateKey) => dailyProfitMap.get(dateKey));
 
 	if (chartInstance) {
 		chartInstance.destroy();
 	}
 
-	chartInstance = new Chart(ctx, {
+	chartInstance = new Chart(elements.profitChartCanvas.getContext('2d'), {
 		type: 'line',
 		data: {
-			labels: labels,
+			labels,
 			datasets: [{
 				label: 'Total Profit Bersih (Rp)',
 				data: dataPoints,
@@ -350,24 +294,10 @@ function updateChart() {
 			responsive: true,
 			maintainAspectRatio: false,
 			plugins: {
-				legend: {
-					display: true
-				},
+				legend: { display: true },
 				tooltip: {
 					callbacks: {
-						label: function(context) {
-							let label = context.dataset.label || '';
-							if (label) {
-								label += ': ';
-							}
-							if (context.parsed.y !== null) {
-								label += new Intl.NumberFormat('id-ID', {
-									style: 'currency',
-									currency: 'IDR'
-								}).format(context.parsed.y);
-							}
-							return label;
-						}
+						label: (context) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`
 					}
 				}
 			},
@@ -376,61 +306,202 @@ function updateChart() {
 					beginAtZero: true,
 					ticks: {
 						color: '#6b7280',
-						callback: function(value) {
-							return 'Rp ' + value.toLocaleString();
-						}
+						callback: (value) => `Rp ${value.toLocaleString()}`
 					}
 				},
-				x: {
-					ticks: {
-						color: '#6b7280'
-					}
-				}
+				x: { ticks: { color: '#6b7280' } }
 			}
 		}
 	});
 }
 
-async function captureAsPNG() {
-	const printableArea = document.getElementById('printableArea');
-	try {
-		const btn = event.target.closest('button');
-		const originalText = btn.innerHTML;
-		btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Processing...';
-		btn.disabled = true;
+function renderData() {
+	const now = new Date();
+	const searchTerm = elements.searchInput.value;
 
-		const canvas = await html2canvas(printableArea, {
+	renderMonthLabel(now);
+	renderSummaryCards(now);
+
+	const filteredTransactions = sortByDateDescending(
+		filterTransactions(transactions, { searchTerm, monthFilter: activeMonthFilter, now })
+	);
+
+	renderTransactionTable(filteredTransactions);
+	renderChart(transactions);
+}
+
+function getFormPayload() {
+	return {
+		date: elements.transactionDate.value,
+		itemName: elements.itemName.value.trim(),
+		qty: parseInt(elements.qty.value, 10),
+		qtyTersisa: parseInt(elements.qtyTersisa.value, 10) || 0,
+		buyPrice: parseFloat(elements.buyPrice.value),
+		sellPrice: parseFloat(elements.sellPrice.value),
+		isPpnApplicable: elements.isPpnApplicable.checked ? 1 : 0
+	};
+}
+
+function resetFormToCreateMode() {
+	elements.salesForm.reset();
+	elements.transactionDate.value = '';
+	delete elements.salesForm.dataset.editId;
+
+	elements.formBtn.innerText = 'Tambah Transaksi';
+	elements.formBtn.classList.replace('bg-orange-500', 'bg-indigo-600');
+}
+
+function setFormToEditMode(transaction) {
+	elements.transactionDate.value = transaction.date;
+	elements.itemName.value = transaction.item_name;
+	elements.qty.value = transaction.qty;
+	elements.qtyTersisa.value = transaction.qty_tersisa || 0;
+	elements.buyPrice.value = transaction.buy_price;
+	elements.sellPrice.value = transaction.sell_price;
+	elements.isPpnApplicable.checked = transaction.is_ppn_applicable === 1;
+	elements.salesForm.dataset.editId = transaction.id;
+
+	elements.formBtn.innerText = 'Update Transaksi';
+	elements.formBtn.classList.replace('bg-indigo-600', 'bg-orange-500');
+}
+
+async function handleFormSubmit(event) {
+	event.preventDefault();
+
+	const editId = elements.salesForm.dataset.editId;
+	const isEditMode = Boolean(editId);
+	const payload = getFormPayload();
+
+	try {
+		await saveTransaction(payload, editId);
+		alert(isEditMode ? 'Data berhasil diupdate!' : 'Transaksi berhasil disimpan!');
+		resetFormToCreateMode();
+		await loadTransactions();
+	} catch (error) {
+		console.error(error);
+		alert('Gagal menyimpan data. Cek koneksi backend.');
+	}
+}
+
+function editTransaction(transactionId) {
+	const transaction = transactions.find((t) => t.id === transactionId);
+	if (!transaction) return;
+
+	elements.salesForm.scrollIntoView({ behavior: 'smooth' });
+	setFormToEditMode(transaction);
+}
+
+async function deleteTransaction(transactionId) {
+	const isConfirmed = confirm('Apakah Anda yakin ingin menghapus transaksi ini?');
+	if (!isConfirmed) return;
+
+	try {
+		await deleteTransactionById(transactionId);
+		await loadTransactions();
+	} catch (error) {
+		console.error(error);
+		alert('Gagal menghapus data.');
+	}
+}
+
+async function resetData() {
+	const isConfirmed = confirm('PERINGATAN: Semua data akan dihapus dari database! Lanjutkan?');
+	if (!isConfirmed) return;
+
+	try {
+		await deleteAllTransactions();
+		alert('Data dihapus (Pastikan LocalStorage juga dibersihkan jika ada).');
+		await loadTransactions();
+	} catch (error) {
+		console.error('Gagal menghapus semua data:', error);
+	}
+}
+
+const FILTER_BUTTON_INDEX = { current: 0, week: 1 };
+
+function filterMonth(filterType) {
+	activeMonthFilter = filterType;
+
+	elements.monthFilterButtons.forEach((button) => {
+		button.classList.remove('bg-indigo-100', 'text-indigo-700', 'border-indigo-200');
+	});
+
+	const activeButtonIndex = FILTER_BUTTON_INDEX[filterType];
+	if (activeButtonIndex !== undefined) {
+		elements.monthFilterButtons[activeButtonIndex].classList.add(
+			'bg-indigo-100', 'text-indigo-700', 'border-indigo-200'
+		);
+	}
+
+	renderData();
+}
+
+function buildCsvRow(transaction) {
+	const metrics = calculateTransactionMetrics(transaction);
+	const transactionDate = new Date(transaction.date);
+
+	return [
+		transactionDate.toLocaleDateString(),
+		transaction.item_name,
+		transaction.qty,
+		transaction.qty_tersisa || 0,
+		transaction.buy_price,
+		transaction.sell_price,
+		metrics.totalModal,
+		metrics.totalPpn,
+		metrics.netProfit
+	].join(',');
+}
+
+function exportToExcel() {
+	const csvHeader = 'Tanggal,Nama Barang,Jumlah,Jumlah Tersisa,Harga Beli,Harga Jual,Modal,Pajak (PPN),Profit Bersih';
+	const csvRows = [...transactions].reverse().map(buildCsvRow);
+	const csvContent = `data:text/csv;charset=utf-8,${csvHeader}\r\n${csvRows.join('\r\n')}`;
+
+	triggerDownload(encodeURI(csvContent), 'Laporan_Penjualan.csv');
+}
+
+async function captureAsPNG(event) {
+	const button = event.target.closest('button');
+	const originalButtonHtml = button.innerHTML;
+
+	const setButtonLoading = (isLoading) => {
+		button.disabled = isLoading;
+		button.innerHTML = isLoading
+			? '<i class="fas fa-spinner fa-spin mr-1"></i> Processing...'
+			: originalButtonHtml;
+	};
+
+	try {
+		setButtonLoading(true);
+
+		const canvas = await html2canvas(elements.printableArea, {
 			allowTaint: true,
 			useCORS: true,
 			scale: 2,
 			backgroundColor: '#ffffff'
 		});
 
-		// Convert to blob dan download
-		canvas.toBlob(function(blob) {
-			const url = URL.createObjectURL(blob);
-			const link = document.createElement('a');
-			const today = new Date().toLocaleDateString('id-ID');
-			link.href = url;
-			link.download = `Hasil Y Team Gorengan minggu ini - ${today}.png`;
-			document.body.appendChild(link);
-			link.click();
-			document.body.removeChild(link);
-			URL.revokeObjectURL(url);
-			btn.innerHTML = originalText;
-			btn.disabled = false;
+		canvas.toBlob((blob) => {
+			const blobUrl = URL.createObjectURL(blob);
+			const todayLabel = new Date().toLocaleDateString('id-ID');
+			triggerDownload(blobUrl, `Hasil Y Team Gorengan minggu ini - ${todayLabel}.png`);
+			URL.revokeObjectURL(blobUrl);
+			setButtonLoading(false);
 		});
 	} catch (error) {
 		console.error('Error capturing PNG:', error);
 		alert('Gagal menangkap gambar. Silakan coba lagi.');
-		const btn = event.target.closest('button');
-		btn.innerHTML = '<i class="fas fa-image mr-1"></i> Download PNG';
-		btn.disabled = false;
+		setButtonLoading(false);
 	}
 }
 
-window.addEventListener('load', () => {
-	fetchData();
-	const today = new Date().toISOString().split('T')[0];
-	document.getElementById('transactionDate').value = today;
-});
+function initializeApp() {
+	elements.transactionDate.value = new Date().toISOString().split('T')[0];
+	elements.searchInput.addEventListener('keyup', renderData);
+	elements.salesForm.addEventListener('submit', handleFormSubmit);
+
+	loadTransactions();
+}
+
+window.addEventListener('load', initializeApp);
