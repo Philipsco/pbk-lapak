@@ -9,6 +9,7 @@ const APP_CONFIG = {
 		'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
 	]
 };
+let sortState = { key: 'date', direction: 'desc' };
 
 const elements = {
 	tableBody: document.getElementById('transactionTableBody'),
@@ -35,6 +36,15 @@ const elements = {
 	isPpnApplicable: document.getElementById('isPpnApplicable'),
 	profitChartCanvas: document.getElementById('profitChart'),
 	printableArea: document.getElementById('printableArea'),
+	topSellingList: document.getElementById('topSellingList'),
+	leastSellingList: document.getElementById('leastSellingList'),
+	loadingState: document.getElementById('loadingState'),
+	itemNameSuggestions: document.getElementById('itemNameSuggestions'),
+	toastContainer: document.getElementById('toastContainer'),
+	confirmModalOverlay: document.getElementById('confirmModalOverlay'),
+	confirmModalMessage: document.getElementById('confirmModalMessage'),
+	confirmModalCancelBtn: document.getElementById('confirmModalCancelBtn'),
+	confirmModalConfirmBtn: document.getElementById('confirmModalConfirmBtn'),
 	monthFilterButtons: document.querySelectorAll('.active-month')
 };
 
@@ -55,6 +65,50 @@ function triggerDownload(href, filename) {
 	document.body.removeChild(link);
 }
 
+const TOAST_STYLE_BY_TYPE = {
+	success: { bg: 'bg-green-600', icon: 'fa-circle-check' },
+	error: { bg: 'bg-red-600', icon: 'fa-circle-exclamation' },
+	info: { bg: 'bg-indigo-600', icon: 'fa-circle-info' }
+};
+
+function showToast(message, type = 'info', durationMs = 3500) {
+	const style = TOAST_STYLE_BY_TYPE[type] || TOAST_STYLE_BY_TYPE.info;
+
+	const toast = document.createElement('div');
+	toast.className = `${style.bg} text-white text-sm font-medium px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 opacity-0 translate-x-2 transition-all duration-300`;
+	toast.innerHTML = `<i class="fas ${style.icon}"></i><span>${message}</span>`;
+	elements.toastContainer.appendChild(toast);
+
+	requestAnimationFrame(() => {
+		toast.classList.remove('opacity-0', 'translate-x-2');
+	});
+
+	setTimeout(() => {
+		toast.classList.add('opacity-0', 'translate-x-2');
+		setTimeout(() => toast.remove(), 300);
+	}, durationMs);
+}
+
+function showConfirmDialog(message) {
+	return new Promise((resolve) => {
+		elements.confirmModalMessage.textContent = message;
+		elements.confirmModalOverlay.classList.remove('hidden');
+
+		const handleResult = (result) => {
+			elements.confirmModalOverlay.classList.add('hidden');
+			elements.confirmModalConfirmBtn.removeEventListener('click', onConfirm);
+			elements.confirmModalCancelBtn.removeEventListener('click', onCancel);
+			resolve(result);
+		};
+
+		const onConfirm = () => handleResult(true);
+		const onCancel = () => handleResult(false);
+
+		elements.confirmModalConfirmBtn.addEventListener('click', onConfirm);
+		elements.confirmModalCancelBtn.addEventListener('click', onCancel);
+	});
+}
+
 function calculateTransactionMetrics(transaction) {
 	const qtySold = transaction.qty - (transaction.qty_tersisa || 0);
 	const totalModal = parseFloat(transaction.buy_price);
@@ -73,6 +127,47 @@ function sumTransactionMetrics(transactionList, metricKey) {
 	);
 }
 
+function buildItemPerformanceList(transactionList) {
+	const itemPerformanceMap = new Map();
+
+	transactionList.forEach((transaction) => {
+		const metrics = calculateTransactionMetrics(transaction);
+		const itemKey = transaction.item_name || 'Tanpa Nama';
+
+		if (!itemPerformanceMap.has(itemKey)) {
+			itemPerformanceMap.set(itemKey, {
+				itemName: itemKey,
+				totalQtySold: 0,
+				totalQtyUnsold: 0,
+				totalRevenue: 0,
+				totalProfit: 0
+			});
+		}
+
+		const performance = itemPerformanceMap.get(itemKey);
+		performance.totalQtySold += metrics.qtySold;
+		performance.totalQtyUnsold += (transaction.qty_tersisa || 0);
+		performance.totalRevenue += metrics.totalPenjualan;
+		performance.totalProfit += metrics.netProfit;
+	});
+
+	return [...itemPerformanceMap.values()];
+}
+
+function getTopSellingItems(itemPerformanceList, limit = 5) {
+	return [...itemPerformanceList]
+		.filter((item) => item.totalQtySold > 0)
+		.sort((a, b) => b.totalQtySold - a.totalQtySold)
+		.slice(0, limit);
+}
+
+function getLeastSellingItems(itemPerformanceList, limit = 5) {
+	return [...itemPerformanceList]
+		.filter((item) => item.totalQtyUnsold > 0)
+		.sort((a, b) => b.totalQtyUnsold - a.totalQtyUnsold)
+		.slice(0, limit);
+}
+
 function isSameMonth(date, referenceDate) {
 	return (
 		date.getMonth() === referenceDate.getMonth() &&
@@ -81,7 +176,7 @@ function isSameMonth(date, referenceDate) {
 }
 
 function getCurrentWeekRange(referenceDate) {
-	const current = new Date(referenceDate);
+	const current = new Date(referenceDate); // clone agar tidak mengubah tanggal aslinya
 	const dayOfWeek = current.getDay();
 	const diffToMonday = current.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
 
@@ -133,8 +228,18 @@ function filterTransactions(transactionList, { searchTerm, monthFilter, now }) {
 	});
 }
 
-function sortByDateDescending(transactionList) {
-	return [...transactionList].sort((a, b) => new Date(b.date) - new Date(a.date));
+function getSortValue(transaction, sortKey) {
+	if (sortKey === 'date') return new Date(transaction.date).getTime();
+	if (sortKey === 'qty') return transaction.qty;
+	if (sortKey === 'qtyTersisa') return transaction.qty_tersisa || 0;
+	return calculateTransactionMetrics(transaction)[sortKey] ?? 0;
+}
+
+function sortTransactions(transactionList, { key, direction }) {
+	const sorted = [...transactionList].sort(
+		(a, b) => getSortValue(a, key) - getSortValue(b, key)
+	);
+	return direction === 'desc' ? sorted.reverse() : sorted;
 }
 
 async function apiRequest(endpoint, options = {}) {
@@ -169,13 +274,24 @@ function deleteAllTransactions() {
 	return apiRequest('/transactions', { method: 'DELETE' });
 }
 
+function setLoadingState(isLoading) {
+	elements.loadingState.classList.toggle('hidden', !isLoading);
+	if (isLoading) {
+		elements.emptyState.classList.add('hidden');
+		elements.tableBody.innerHTML = '';
+	}
+}
+
 async function loadTransactions() {
+	setLoadingState(true);
 	try {
 		transactions = await fetchTransactions();
 		renderData();
 	} catch (error) {
 		console.error('Error fetching data:', error);
-		alert('Tidak bisa terhubung ke Backend. Pastikan server berjalan di http://localhost:3000');
+		showToast('Tidak bisa terhubung ke Backend. Pastikan server berjalan di http://localhost:3000', 'error');
+	} finally {
+		setLoadingState(false);
 	}
 }
 
@@ -315,15 +431,83 @@ function renderChart(transactionList) {
 	});
 }
 
+function renderRankingList(container, items, { valueKey, valueSuffix, emptyMessage }) {
+	if (items.length === 0) {
+		container.innerHTML = `<li class="text-xs text-gray-400 italic py-2">${emptyMessage}</li>`;
+		return;
+	}
+
+	container.innerHTML = items
+		.map((item, index) => `
+			<li class="flex justify-between items-center py-2">
+				<span class="text-sm text-gray-700 truncate max-w-[65%]" title="${item.itemName}">
+					<span class="text-gray-400 font-mono mr-2">#${index + 1}</span>${item.itemName}
+				</span>
+				<span class="text-sm font-bold text-gray-600 whitespace-nowrap">${item[valueKey]} ${valueSuffix}</span>
+			</li>
+		`)
+		.join('');
+}
+
+function renderItemAnalytics() {
+	const itemPerformanceList = buildItemPerformanceList(transactions);
+
+	renderRankingList(elements.topSellingList, getTopSellingItems(itemPerformanceList), {
+		valueKey: 'totalQtySold',
+		valueSuffix: 'pcs terjual',
+		emptyMessage: 'Belum ada barang terjual.'
+	});
+
+	renderRankingList(elements.leastSellingList, getLeastSellingItems(itemPerformanceList), {
+		valueKey: 'totalQtyUnsold',
+		valueSuffix: 'pcs tersisa',
+		emptyMessage: 'Tidak ada barang tersisa. \u{1F389}'
+	});
+}
+
+function renderItemNameSuggestions() {
+	const uniqueItemNames = [...new Set(transactions.map((t) => t.item_name).filter(Boolean))]
+		.sort((a, b) => a.localeCompare(b));
+
+	elements.itemNameSuggestions.innerHTML = uniqueItemNames
+		.map((name) => `<option value="${name}"></option>`)
+		.join('');
+}
+
+function renderSortIndicators() {
+	document.querySelectorAll('[data-sort-icon]').forEach((icon) => {
+		const sortKey = icon.dataset.sortIcon;
+		icon.className = 'fas ml-1 text-gray-400 fa-sort';
+
+		if (sortKey === sortState.key) {
+			icon.classList.remove('fa-sort', 'text-gray-400');
+			icon.classList.add(sortState.direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down', 'text-indigo-600');
+		}
+	});
+}
+
+function handleSortClick(sortKey) {
+	if (sortState.key === sortKey) {
+		sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+	} else {
+		sortState = { key: sortKey, direction: 'desc' };
+	}
+	renderData();
+}
+
 function renderData() {
 	const now = new Date();
 	const searchTerm = elements.searchInput.value;
 
 	renderMonthLabel(now);
 	renderSummaryCards(now);
+	renderItemAnalytics();
+	renderItemNameSuggestions();
+	renderSortIndicators();
 
-	const filteredTransactions = sortByDateDescending(
-		filterTransactions(transactions, { searchTerm, monthFilter: activeMonthFilter, now })
+	const filteredTransactions = sortTransactions(
+		filterTransactions(transactions, { searchTerm, monthFilter: activeMonthFilter, now }),
+		sortState
 	);
 
 	renderTransactionTable(filteredTransactions);
@@ -372,14 +556,23 @@ async function handleFormSubmit(event) {
 	const isEditMode = Boolean(editId);
 	const payload = getFormPayload();
 
+	const originalButtonText = elements.formBtn.innerText;
+	elements.formBtn.disabled = true;
+	elements.formBtn.innerText = 'Menyimpan...';
+
 	try {
 		await saveTransaction(payload, editId);
-		alert(isEditMode ? 'Data berhasil diupdate!' : 'Transaksi berhasil disimpan!');
+		showToast(isEditMode ? 'Data berhasil diupdate!' : 'Transaksi berhasil disimpan!', 'success');
 		resetFormToCreateMode();
 		await loadTransactions();
 	} catch (error) {
 		console.error(error);
-		alert('Gagal menyimpan data. Cek koneksi backend.');
+		showToast('Gagal menyimpan data. Cek koneksi backend.', 'error');
+	} finally {
+		elements.formBtn.disabled = false;
+		if (elements.formBtn.innerText === 'Menyimpan...') {
+			elements.formBtn.innerText = originalButtonText;
+		}
 	}
 }
 
@@ -392,28 +585,30 @@ function editTransaction(transactionId) {
 }
 
 async function deleteTransaction(transactionId) {
-	const isConfirmed = confirm('Apakah Anda yakin ingin menghapus transaksi ini?');
+	const isConfirmed = await showConfirmDialog('Apakah Anda yakin ingin menghapus transaksi ini?');
 	if (!isConfirmed) return;
 
 	try {
 		await deleteTransactionById(transactionId);
+		showToast('Transaksi berhasil dihapus.', 'success');
 		await loadTransactions();
 	} catch (error) {
 		console.error(error);
-		alert('Gagal menghapus data.');
+		showToast('Gagal menghapus data.', 'error');
 	}
 }
 
 async function resetData() {
-	const isConfirmed = confirm('PERINGATAN: Semua data akan dihapus dari database! Lanjutkan?');
+	const isConfirmed = await showConfirmDialog('PERINGATAN: Semua data akan dihapus dari database! Lanjutkan?');
 	if (!isConfirmed) return;
 
 	try {
 		await deleteAllTransactions();
-		alert('Data dihapus (Pastikan LocalStorage juga dibersihkan jika ada).');
+		showToast('Semua data berhasil dihapus.', 'success');
 		await loadTransactions();
 	} catch (error) {
 		console.error('Gagal menghapus semua data:', error);
+		showToast('Gagal menghapus semua data.', 'error');
 	}
 }
 
@@ -461,45 +656,84 @@ function exportToExcel() {
 	triggerDownload(encodeURI(csvContent), 'Laporan_Penjualan.csv');
 }
 
-async function captureAsPNG(event) {
+async function withButtonLoadingState(event, loadingLabel, action) {
 	const button = event.target.closest('button');
 	const originalButtonHtml = button.innerHTML;
 
-	const setButtonLoading = (isLoading) => {
-		button.disabled = isLoading;
-		button.innerHTML = isLoading
-			? '<i class="fas fa-spinner fa-spin mr-1"></i> Processing...'
-			: originalButtonHtml;
-	};
+	button.disabled = true;
+	button.innerHTML = `<i class="fas fa-spinner fa-spin mr-1"></i> ${loadingLabel}`;
 
 	try {
-		setButtonLoading(true);
-
-		const canvas = await html2canvas(elements.printableArea, {
-			allowTaint: true,
-			useCORS: true,
-			scale: 2,
-			backgroundColor: '#ffffff'
-		});
-
-		canvas.toBlob((blob) => {
-			const blobUrl = URL.createObjectURL(blob);
-			const todayLabel = new Date().toLocaleDateString('id-ID');
-			triggerDownload(blobUrl, `Hasil Y Team Gorengan minggu ini - ${todayLabel}.png`);
-			URL.revokeObjectURL(blobUrl);
-			setButtonLoading(false);
-		});
-	} catch (error) {
-		console.error('Error capturing PNG:', error);
-		alert('Gagal menangkap gambar. Silakan coba lagi.');
-		setButtonLoading(false);
+		await action();
+	} finally {
+		button.disabled = false;
+		button.innerHTML = originalButtonHtml;
 	}
+}
+
+function captureTableAsCanvas() {
+	return html2canvas(elements.printableArea, {
+		allowTaint: true,
+		useCORS: true,
+		scale: 2,
+		backgroundColor: '#ffffff'
+	});
+}
+
+async function captureAsPNG(event) {
+	await withButtonLoadingState(event, 'Processing...', async () => {
+		try {
+			const canvas = await captureTableAsCanvas();
+
+			await new Promise((resolve) => {
+				canvas.toBlob((blob) => {
+					const blobUrl = URL.createObjectURL(blob);
+					const todayLabel = new Date().toLocaleDateString('id-ID');
+					triggerDownload(blobUrl, `Hasil Y Team Gorengan minggu ini - ${todayLabel}.png`);
+					URL.revokeObjectURL(blobUrl);
+					resolve();
+				});
+			});
+		} catch (error) {
+			console.error('Error capturing PNG:', error);
+			showToast('Gagal menangkap gambar. Silakan coba lagi.', 'error');
+		}
+	});
+}
+
+async function exportToPDF(event) {
+	await withButtonLoadingState(event, 'Membuat PDF...', async () => {
+		try {
+			const canvas = await captureTableAsCanvas();
+			const imageData = canvas.toDataURL('image/png');
+
+			const { jsPDF } = window.jspdf;
+			const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+
+			const pageWidth = pdf.internal.pageSize.getWidth();
+			const imageProps = pdf.getImageProperties(imageData);
+			const imageHeight = (imageProps.height * pageWidth) / imageProps.width;
+
+			pdf.addImage(imageData, 'PNG', 0, 0, pageWidth, imageHeight);
+
+			const todayLabel = new Date().toLocaleDateString('id-ID').replace(/\//g, '-');
+			pdf.save(`Laporan_Penjualan_${todayLabel}.pdf`);
+			showToast('PDF berhasil dibuat.', 'success');
+		} catch (error) {
+			console.error('Error membuat PDF:', error);
+			showToast('Gagal membuat PDF. Silakan coba lagi.', 'error');
+		}
+	});
 }
 
 function initializeApp() {
 	elements.transactionDate.value = new Date().toISOString().split('T')[0];
 	elements.searchInput.addEventListener('keyup', renderData);
 	elements.salesForm.addEventListener('submit', handleFormSubmit);
+
+	document.querySelectorAll('[data-sort-key]').forEach((header) => {
+		header.addEventListener('click', () => handleSortClick(header.dataset.sortKey));
+	});
 
 	loadTransactions();
 }
