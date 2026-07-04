@@ -6,9 +6,64 @@ body {
   transition: transform 0.2s;
 }
 
+
 .card:hover {
   transform: translateY(-5px);
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+/* Horizontal scroll for mobile tables */
+@media (max-width: 768px) {
+  .table-container {
+    overflow-x: auto;
+    scrollbar-width: thin; /* For Firefox */
+    scrollbar-color: #4f46e5 #f3f4f6; /* Custom scrollbar colors */
+  }
+  
+  .table-container::-webkit-scrollbar {
+    height: 8px; /* Scrollbar height */
+  }
+
+  .table-container::-webkit-scrollbar-track {
+    background: #f3f4f6;
+    border-radius: 4px;
+  }
+
+  .table-container::-webkit-scrollbar-thumb {
+    background-color: #4f46e5;
+    border-radius: 4px;
+  }
+  
+  th, td {
+    padding: 12px;
+  }
+
+  th:nth-child(9), td:nth-child(9) {
+    width: 120px;
+    text-align: right;
+  }
+
+  .action-buttons button {
+    padding: 8px 16px;
+    font-size: 14px;
+  }
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  th, td {
+    padding: 12px;
+  }
+
+  th:nth-child(9), td:nth-child(9) {
+    width: 120px;
+    text-align: right;
+  }
+
+  .action-buttons button {
+    padding: 8px 16px;
+    font-size: 14px;
+  }
 }
 
 @media print {
