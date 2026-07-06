@@ -10,6 +10,8 @@ const APP_CONFIG = {
 	]
 };
 let sortState = { key: 'date', direction: 'desc' };
+let paginationState = { currentPage: 1, itemsPerPage: 10 };
+let selectedMonthDate = getStartOfMonth(new Date());
 
 const elements = {
 	tableBody: document.getElementById('transactionTableBody'),
@@ -20,9 +22,9 @@ const elements = {
 	weekProfitDisplay: document.getElementById('weekProfitDisplay'),
 	monthModal: document.getElementById('monthModal'),
 	monthSales: document.getElementById('monthSales'),
-	monthSales2: document.getElementById('monthSales2'),
+	weeklyTfSales: document.getElementById('weeklyTfSales'),
 	monthPpn: document.getElementById('monthPpn'),
-	monthPpn2: document.getElementById('monthPpn2'),
+	weeklyPpn: document.getElementById('weeklyPpn'),
 	monthProfit: document.getElementById('monthProfit'),
 	allTimeProfitDisplay: document.getElementById('allTimeProfitDisplay'),
 	salesForm: document.getElementById('salesForm'),
@@ -45,6 +47,15 @@ const elements = {
 	confirmModalMessage: document.getElementById('confirmModalMessage'),
 	confirmModalCancelBtn: document.getElementById('confirmModalCancelBtn'),
 	confirmModalConfirmBtn: document.getElementById('confirmModalConfirmBtn'),
+	paginationControls: document.getElementById('paginationControls'),
+	paginationInfo: document.getElementById('paginationInfo'),
+	itemsPerPageSelect: document.getElementById('itemsPerPageSelect'),
+	prevPageBtn: document.getElementById('prevPageBtn'),
+	nextPageBtn: document.getElementById('nextPageBtn'),
+	pageIndicator: document.getElementById('pageIndicator'),
+	prevMonthBtn: document.getElementById('prevMonthBtn'),
+	nextMonthBtn: document.getElementById('nextMonthBtn'),
+	goToCurrentMonthBtn: document.getElementById('goToCurrentMonthBtn'),
 	monthFilterButtons: document.querySelectorAll('.active-month')
 };
 
@@ -175,6 +186,10 @@ function isSameMonth(date, referenceDate) {
 	);
 }
 
+function getStartOfMonth(date) {
+	return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
 function getCurrentWeekRange(referenceDate) {
 	const current = new Date(referenceDate); // clone agar tidak mengubah tanggal aslinya
 	const dayOfWeek = current.getDay();
@@ -295,24 +310,31 @@ async function loadTransactions() {
 	}
 }
 
-function renderMonthLabel(now) {
-	elements.currentMonthLabel.innerText = `${now.getFullYear()} - ${APP_CONFIG.monthNames[now.getMonth()]}`;
+function renderMonthLabel() {
+	elements.currentMonthLabel.innerText =
+		`${selectedMonthDate.getFullYear()} - ${APP_CONFIG.monthNames[selectedMonthDate.getMonth()]}`;
+}
+
+function updateMonthNavigationUI(now) {
+	const isViewingCurrentMonth = selectedMonthDate.getTime() === getStartOfMonth(now).getTime();
+	elements.nextMonthBtn.disabled = isViewingCurrentMonth;
+	elements.goToCurrentMonthBtn.classList.toggle('hidden', isViewingCurrentMonth);
 }
 
 function renderSummaryCards(now) {
-	const currentMonthTransactions = transactions.filter((t) => isSameMonth(new Date(t.date), now));
+	const selectedMonthTransactions = transactions.filter((t) => isSameMonth(new Date(t.date), selectedMonthDate));
 	const currentWeekTransactions = transactions.filter((t) =>
 		isWithinRange(new Date(t.date), getCurrentWeekRange(now))
 	);
 
-	const monthSalesTotal = sumTransactionMetrics(currentMonthTransactions, 'totalPenjualan');
-	const monthModalTotal = sumTransactionMetrics(currentMonthTransactions, 'totalModal');
-	const monthPpnTotal = sumTransactionMetrics(currentMonthTransactions, 'totalPpn');
+	const monthSalesTotal = sumTransactionMetrics(selectedMonthTransactions, 'totalPenjualan');
+	const monthModalTotal = sumTransactionMetrics(selectedMonthTransactions, 'totalModal');
+	const monthPpnTotal = sumTransactionMetrics(selectedMonthTransactions, 'totalPpn');
 	const monthProfitTotal = monthSalesTotal - monthModalTotal - monthPpnTotal;
-	const transferToPbkTotal = monthSalesTotal - monthPpnTotal;
-
+	const weekSalesTotal = sumTransactionMetrics(currentWeekTransactions, 'totalPenjualan');
 	const weekPpnTotal = sumTransactionMetrics(currentWeekTransactions, 'totalPpn');
 	const weekProfitTotal = sumTransactionMetrics(currentWeekTransactions, 'netProfit');
+	const transferToPbkTotal = weekSalesTotal - weekPpnTotal;
 
 	const allTimeProfitTotal = sumTransactionMetrics(transactions, 'netProfit');
 
@@ -320,9 +342,9 @@ function renderSummaryCards(now) {
 	elements.weekProfitDisplay.innerText = formatCurrency(weekProfitTotal);
 	elements.monthModal.innerText = formatCurrency(monthModalTotal);
 	elements.monthSales.innerText = formatCurrency(monthSalesTotal);
-	elements.monthSales2.innerText = formatCurrency(transferToPbkTotal);
+	elements.weeklyTfSales.innerText = formatCurrency(transferToPbkTotal);
 	elements.monthPpn.innerText = formatCurrency(monthPpnTotal);
-	elements.monthPpn2.innerText = formatCurrency(monthPpnTotal);
+	elements.weeklyPpn.innerText = formatCurrency(weekPpnTotal);
 	elements.monthProfit.innerText = formatCurrency(monthProfitTotal);
 	elements.allTimeProfitDisplay.innerText = formatCurrency(allTimeProfitTotal);
 }
@@ -356,10 +378,38 @@ function renderTransactionRow(transaction) {
 	`;
 }
 
+function paginateTransactions(transactionList, { currentPage, itemsPerPage }) {
+	const totalItems = transactionList.length;
+	const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+	const safePage = Math.min(Math.max(1, currentPage), totalPages);
+	const startIndex = (safePage - 1) * itemsPerPage;
+
+	return {
+		pageItems: transactionList.slice(startIndex, startIndex + itemsPerPage),
+		totalItems,
+		totalPages,
+		currentPage: safePage
+	};
+}
+
 function renderTransactionTable(transactionList) {
 	const hasData = transactionList.length > 0;
 	elements.emptyState.classList.toggle('hidden', hasData);
 	elements.tableBody.innerHTML = hasData ? transactionList.map(renderTransactionRow).join('') : '';
+}
+
+function renderPaginationControls({ totalItems, totalPages, currentPage, itemsPerPage }) {
+	const hasData = totalItems > 0;
+	elements.paginationControls.classList.toggle('hidden', !hasData);
+	if (!hasData) return;
+
+	const startItem = (currentPage - 1) * itemsPerPage + 1;
+	const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+
+	elements.paginationInfo.textContent = `Menampilkan ${startItem}-${endItem} dari ${totalItems} data`;
+	elements.pageIndicator.textContent = `Halaman ${currentPage} / ${totalPages}`;
+	elements.prevPageBtn.disabled = currentPage <= 1;
+	elements.nextPageBtn.disabled = currentPage >= totalPages;
 }
 
 function buildDailyProfitMap(transactionList) {
@@ -492,25 +542,39 @@ function handleSortClick(sortKey) {
 	} else {
 		sortState = { key: sortKey, direction: 'desc' };
 	}
+	paginationState.currentPage = 1;
 	renderData();
+}
+
+function getFilteredSortedTransactions() {
+	const now = new Date();
+	const searchTerm = elements.searchInput.value;
+
+	return sortTransactions(
+		filterTransactions(transactions, { searchTerm, monthFilter: activeMonthFilter, now }),
+		sortState
+	);
 }
 
 function renderData() {
 	const now = new Date();
-	const searchTerm = elements.searchInput.value;
-
-	renderMonthLabel(now);
+	renderMonthLabel();
+	updateMonthNavigationUI(now);
 	renderSummaryCards(now);
 	renderItemAnalytics();
 	renderItemNameSuggestions();
 	renderSortIndicators();
 
-	const filteredTransactions = sortTransactions(
-		filterTransactions(transactions, { searchTerm, monthFilter: activeMonthFilter, now }),
-		sortState
-	);
+	const filteredTransactions = getFilteredSortedTransactions();
 
-	renderTransactionTable(filteredTransactions);
+	const { pageItems, totalItems, totalPages, currentPage } = paginateTransactions(
+		filteredTransactions,
+		paginationState
+	);
+	paginationState.currentPage = currentPage; // clamp state jika halaman lama sudah tidak valid
+
+	renderTransactionTable(pageItems);
+	renderPaginationControls({ totalItems, totalPages, currentPage, itemsPerPage: paginationState.itemsPerPage });
 	renderChart(transactions);
 }
 
@@ -616,6 +680,7 @@ const FILTER_BUTTON_INDEX = { current: 0, week: 1 };
 
 function filterMonth(filterType) {
 	activeMonthFilter = filterType;
+	paginationState.currentPage = 1;
 
 	elements.monthFilterButtons.forEach((button) => {
 		button.classList.remove('bg-indigo-100', 'text-indigo-700', 'border-indigo-200');
@@ -680,56 +745,135 @@ function captureTableAsCanvas() {
 	});
 }
 
+async function withFullTransactionListRendered(action) {
+	const previousPage = paginationState.currentPage;
+
+	renderTransactionTable(getFilteredSortedTransactions());
+	elements.paginationControls.classList.add('hidden');
+
+	try {
+		await action();
+	} finally {
+		paginationState.currentPage = previousPage;
+		renderData();
+	}
+}
+
 async function captureAsPNG(event) {
 	await withButtonLoadingState(event, 'Processing...', async () => {
-		try {
-			const canvas = await captureTableAsCanvas();
+		await withFullTransactionListRendered(async () => {
+			try {
+				const canvas = await captureTableAsCanvas();
 
-			await new Promise((resolve) => {
-				canvas.toBlob((blob) => {
-					const blobUrl = URL.createObjectURL(blob);
-					const todayLabel = new Date().toLocaleDateString('id-ID');
-					triggerDownload(blobUrl, `Hasil Y Team Gorengan minggu ini - ${todayLabel}.png`);
-					URL.revokeObjectURL(blobUrl);
-					resolve();
+				await new Promise((resolve) => {
+					canvas.toBlob((blob) => {
+						const blobUrl = URL.createObjectURL(blob);
+						const todayLabel = new Date().toLocaleDateString('id-ID');
+						triggerDownload(blobUrl, `Hasil Y Team Gorengan minggu ini - ${todayLabel}.png`);
+						URL.revokeObjectURL(blobUrl);
+						resolve();
+					});
 				});
-			});
-		} catch (error) {
-			console.error('Error capturing PNG:', error);
-			showToast('Gagal menangkap gambar. Silakan coba lagi.', 'error');
-		}
+			} catch (error) {
+				console.error('Error capturing PNG:', error);
+				showToast('Gagal menangkap gambar. Silakan coba lagi.', 'error');
+			}
+		});
 	});
 }
 
 async function exportToPDF(event) {
 	await withButtonLoadingState(event, 'Membuat PDF...', async () => {
-		try {
-			const canvas = await captureTableAsCanvas();
-			const imageData = canvas.toDataURL('image/png');
+		await withFullTransactionListRendered(async () => {
+			try {
+				const canvas = await captureTableAsCanvas();
+				const imageData = canvas.toDataURL('image/png');
 
-			const { jsPDF } = window.jspdf;
-			const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+				const { jsPDF } = window.jspdf;
+				const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
 
-			const pageWidth = pdf.internal.pageSize.getWidth();
-			const imageProps = pdf.getImageProperties(imageData);
-			const imageHeight = (imageProps.height * pageWidth) / imageProps.width;
+				const pageWidth = pdf.internal.pageSize.getWidth();
+				const imageProps = pdf.getImageProperties(imageData);
+				const imageHeight = (imageProps.height * pageWidth) / imageProps.width;
 
-			pdf.addImage(imageData, 'PNG', 0, 0, pageWidth, imageHeight);
+				pdf.addImage(imageData, 'PNG', 0, 0, pageWidth, imageHeight);
 
-			const todayLabel = new Date().toLocaleDateString('id-ID').replace(/\//g, '-');
-			pdf.save(`Laporan_Penjualan_${todayLabel}.pdf`);
-			showToast('PDF berhasil dibuat.', 'success');
-		} catch (error) {
-			console.error('Error membuat PDF:', error);
-			showToast('Gagal membuat PDF. Silakan coba lagi.', 'error');
-		}
+				const todayLabel = new Date().toLocaleDateString('id-ID').replace(/\//g, '-');
+				pdf.save(`Laporan_Penjualan_${todayLabel}.pdf`);
+				showToast('PDF berhasil dibuat.', 'success');
+			} catch (error) {
+				console.error('Error membuat PDF:', error);
+				showToast('Gagal membuat PDF. Silakan coba lagi.', 'error');
+			}
+		});
 	});
+}
+
+function printReport() {
+	const previousPage = paginationState.currentPage;
+	renderTransactionTable(getFilteredSortedTransactions());
+
+	const restorePaginatedView = () => {
+		paginationState.currentPage = previousPage;
+		renderData();
+		window.removeEventListener('afterprint', restorePaginatedView);
+	};
+	window.addEventListener('afterprint', restorePaginatedView);
+
+	window.print();
+}
+
+function handleSearchInput() {
+	paginationState.currentPage = 1;
+	renderData();
+}
+
+function handleItemsPerPageChange() {
+	paginationState.itemsPerPage = parseInt(elements.itemsPerPageSelect.value, 10);
+	paginationState.currentPage = 1;
+	renderData();
+}
+
+function goToPreviousPage() {
+	paginationState.currentPage = Math.max(1, paginationState.currentPage - 1);
+	renderData();
+}
+
+function goToNextPage() {
+	paginationState.currentPage += 1; // akan otomatis di-clamp oleh paginateTransactions()
+	renderData();
+}
+
+function goToPreviousMonth() {
+	selectedMonthDate = new Date(selectedMonthDate.getFullYear(), selectedMonthDate.getMonth() - 1, 1);
+	renderData();
+}
+
+function goToNextMonth() {
+	const nextMonth = new Date(selectedMonthDate.getFullYear(), selectedMonthDate.getMonth() + 1, 1);
+	const currentMonthStart = getStartOfMonth(new Date());
+
+	selectedMonthDate = nextMonth.getTime() > currentMonthStart.getTime() ? currentMonthStart : nextMonth;
+	renderData();
+}
+
+function goToCurrentMonth() {
+	selectedMonthDate = getStartOfMonth(new Date());
+	renderData();
 }
 
 function initializeApp() {
 	elements.transactionDate.value = new Date().toISOString().split('T')[0];
-	elements.searchInput.addEventListener('keyup', renderData);
+	elements.itemsPerPageSelect.value = String(paginationState.itemsPerPage);
+
+	elements.searchInput.addEventListener('keyup', handleSearchInput);
 	elements.salesForm.addEventListener('submit', handleFormSubmit);
+	elements.itemsPerPageSelect.addEventListener('change', handleItemsPerPageChange);
+	elements.prevPageBtn.addEventListener('click', goToPreviousPage);
+	elements.nextPageBtn.addEventListener('click', goToNextPage);
+	elements.prevMonthBtn.addEventListener('click', goToPreviousMonth);
+	elements.nextMonthBtn.addEventListener('click', goToNextMonth);
+	elements.goToCurrentMonthBtn.addEventListener('click', goToCurrentMonth);
 
 	document.querySelectorAll('[data-sort-key]').forEach((header) => {
 		header.addEventListener('click', () => handleSortClick(header.dataset.sortKey));
