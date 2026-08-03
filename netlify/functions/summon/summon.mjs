@@ -8,7 +8,7 @@
 // itu tidak masalah — Node bisa meng-import module CJS dari file ESM.
 
 import serverless from 'serverless-http';
-import pkg from '../server.js';
+import pkg from '../../../server.js';
 
 const { app, initDb } = pkg;
 
