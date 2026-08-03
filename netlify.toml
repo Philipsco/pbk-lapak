@@ -1,17 +1,9 @@
-# netlify.toml
-# Referensi: https://docs.netlify.com/build/configure-builds/file-based-configuration/
-
 [build]
-  # Folder yang berisi file statis (index.html, app.js, css, dll)
-  # Sesuaikan jika folder frontend-mu bukan "public"
   publish = "public"
-
-  # Netlify tetap perlu install dependencies (express, pg, serverless-http)
-  # walaupun tidak ada proses "build" sesungguhnya
   command = "npm install"
 
 [build.environment]
-  NODE_VERSION = "20"
+  NODE_VERSION = "24"
 
 [functions]
   # Lokasi function hasil refactor dari server.js
