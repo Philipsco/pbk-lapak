@@ -104,17 +104,13 @@ app.delete('/api/transactions', async (req, res) => {
     }
 });
 
-if (require.main === module) {
-    initDb()
-        .then(() => {
-            app.listen(PORT, () => {
-                console.log(`Server sudah berjalan di ${PORT}`);
-            });
-        })
-        .catch((err) => {
-            console.error('Gagal inisialisasi database:', err);
-            process.exit(1);
+initDb()
+    .then(() => {
+        app.listen(PORT, () => {
+            console.log(`Server sudah berjalan di ${PORT}`);
         });
-}
- 
-module.exports = { app, initDb };
+    })
+    .catch((err) => {
+        console.error('Gagal inisialisasi database:', err);
+        process.exit(1);
+    });
