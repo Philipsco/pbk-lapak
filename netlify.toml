@@ -1,17 +1,45 @@
+# netlify.toml
+# Referensi: https://docs.netlify.com/build/configure-builds/file-based-configuration/
+
 [build]
+  # Folder yang berisi file statis (index.html, app.js, css, dll)
+  # Sesuaikan jika folder frontend-mu bukan "public"
   publish = "public"
-  functions = "netlify/functions"
+
+  # Netlify tetap perlu install dependencies (express, pg, serverless-http)
+  # walaupun tidak ada proses "build" sesungguhnya
   command = "npm install"
 
-[functions]
-  node_bundler = "esbuild"
+[build.environment]
+  NODE_VERSION = "20"
 
+[functions]
+  # Lokasi function hasil refactor dari server.js
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+  # pg butuh native/optional deps, external_node_modules memastikan
+  # tidak ikut di-bundle ulang oleh esbuild
+  external_node_modules = ["pg", "pg-native"]
+
+# Redirect semua request /api/* ke Netlify Function "api"
+# app.js kamu memanggil `${window.location.origin}/api/...`
+# jadi ini yang membuat endpoint tetap bekerja tanpa ubah app.js
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/api/:splat"
   status = 200
+  force = true
 
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+# (opsional) kalau frontend-mu Single Page App / butuh fallback routing,
+# aktifkan redirect ini. Kalau cuma index.html statis biasa, boleh dihapus.
+# [[redirects]]
+#   from = "/*"
+#   to = "/index.html"
+#   status = 200
+
+[dev]
+  command = "npm run dev"
+  targetPort = 3000
+  port = 8888
+  publish = "public"
+  framework = "#custom"

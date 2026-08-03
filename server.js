@@ -5,7 +5,7 @@ const path = require('path');
 const dotenv = require('dotenv');
 dotenv.config();
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
@@ -104,13 +104,17 @@ app.delete('/api/transactions', async (req, res) => {
     }
 });
 
-initDb()
-    .then(() => {
-        app.listen(PORT, () => {
-            console.log(`Server sudah berjalan di ${PORT}`);
+if (require.main === module) {
+    initDb()
+        .then(() => {
+            app.listen(PORT, () => {
+                console.log(`Server sudah berjalan di ${PORT}`);
+            });
+        })
+        .catch((err) => {
+            console.error('Gagal inisialisasi database:', err);
+            process.exit(1);
         });
-    })
-    .catch((err) => {
-        console.error('Gagal inisialisasi database:', err);
-        process.exit(1);
-    });
+}
+ 
+module.exports = { app, initDb };
