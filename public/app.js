@@ -124,7 +124,7 @@ function calculateTransactionMetrics(transaction) {
 	const qtySold = transaction.qty - (transaction.qty_tersisa || 0);
 	const totalModal = parseFloat(transaction.buy_price);
 	const totalPenjualan = qtySold * parseFloat(transaction.sell_price);
-	const isPpnApplicable = transaction.is_ppn_applicable === 1;
+	const isPpnApplicable = transaction.is_ppn_applicable === true;
 	const totalPpn = isPpnApplicable ? totalPenjualan * APP_CONFIG.ppnRate : 0;
 	const netProfit = (totalPenjualan - totalModal) - totalPpn;
 
