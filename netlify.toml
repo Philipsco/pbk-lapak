@@ -13,12 +13,13 @@
   # tidak ikut di-bundle ulang oleh esbuild
   external_node_modules = ["pg", "pg-native"]
 
-# Redirect semua request /api/* ke Netlify Function "api"
+# Redirect semua request /api/* ke Netlify Function "summon"
+# (nama function = nama file summon.mjs tanpa ekstensi)
 # app.js kamu memanggil `${window.location.origin}/api/...`
 # jadi ini yang membuat endpoint tetap bekerja tanpa ubah app.js
 [[redirects]]
   from = "/api/*"
-  to = "/.netlify/functions/api/:splat"
+  to = "/.netlify/functions/summon/:splat"
   status = 200
   force = true
 
