@@ -19,7 +19,7 @@
         <h1 class="text-xl font-bold">
           <i class="fas fa-chart-line mr-2"></i>PBK Lapak Kalkulator
         </h1>
-        <button onclick="resetData()" class="text-xs bg-indigo-800 px-3 py-1 rounded hover:bg-red-500 transition no-print">Clear DATA</button>
+        <!-- <button onclick="resetData()" class="text-xs bg-indigo-800 px-3 py-1 rounded hover:bg-red-500 transition no-print">Clear DATA</button> -->
       </div>
     </nav>
     <div class="container mx-auto mt-8 p-4 grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -56,7 +56,7 @@
                 </div>
               <div>
                 <label class="block text-sm font-medium text-gray-600">Harga Jual Per Pcs (Rp)</label>
-                <input type="number" id="sellPrice" min="1" required class="w-full mt-1 p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none">
+                <input type="number" id="sellPrice" min="0" required class="w-full mt-1 p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none">
               </div>
               <!-- Checkbox Kena PPN -->
               <div class="flex items-center gap-2 bg-gray-50 p-3 rounded border border-gray-200">
@@ -100,7 +100,7 @@
               <button id="nextMonthBtn" class="w-6 h-6 flex items-center justify-center text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition no-print" title="Bulan berikutnya">
                 <i class="fas fa-chevron-right"></i>
               </button>
-              <button id="goToCurrentMonthBtn" class="hidden text-xs text-indigo-600 hover:underline no-print">Kembali ke bulan ini</button>
+              <button id="goToCurrentMonthBtn" class="hidden text-xs text-indigo-600 hover:underline no-print">This Month</button>
             </div>
           </div>
           <div class="grid grid-cols-3 w-full max-w-md gap-6 text-center">

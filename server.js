@@ -44,7 +44,7 @@ app.post('/api/transactions', (req, res) => {
     const { date, itemName, qty, qtyTersisa, buyPrice, sellPrice, isPpnApplicable } = req.body;
 
     // Validasi sederhana
-    if (!date || !itemName || !qty || !sellPrice) {
+    if (!date || !itemName || !qty) {
         return res.status(400).json({ error: "Semua field wajib diisi" });
     }
 
